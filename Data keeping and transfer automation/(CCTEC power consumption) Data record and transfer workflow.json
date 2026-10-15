@@ -1,0 +1,648 @@
+{
+  "name": "(CCTEC power consumption) Data record and transfer workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "1AQI82SJjQNnFw6w0HFK7PDVmGzXGCZGK-BFJlmF9TAA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1785111699",
+          "mode": "id"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "id": "070ea9cf-684b-4314-83ce-edf1d4bd238d",
+      "name": "Google Sheets Trigger",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -80
+      ],
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "Q07Fht6wwxUSkVwc",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1AQI82SJjQNnFw6w0HFK7PDVmGzXGCZGK-BFJlmF9TAA"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1785111699",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "ed80c4af-5f57-441d-9d00-dfb8699c3696",
+      "name": "Get row(s) in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        288,
+        -80
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FZHZ3z8rkap2tYax",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// n8n Code node — paste this in, set mode to \"Run Once for All Items\"\n//\n// This node receives ALL rows from the worksheet (new submission + every\n// existing row). It automatically picks out:\n//   - the NEWEST row  -> treated as Input 2 (the new submission)\n//   - the row before it -> treated as Input 1 (last existing data)\n// then runs the same EPAIL / Glass Fac. arithmetic as before.\n\n// ===================== CONFIG =====================\n// The field holding each row's number. Google Sheets nodes in n8n return\n// this as 'row_number' by default. Rows are sorted by it numerically, so\n// the highest row number = newest row, and the next highest = previous row.\n// Leave as '' to just trust the order rows already arrive in.\nconst ROW_FIELD = 'row_number';\n// ======================================================\n\nlet items = $input.all().map(i => i.json);\n\nif (items.length < 2) {\n  throw new Error(\n    `Need at least 2 rows to compare (a new submission + prior data). Only received ${items.length}.`\n  );\n}\n\nif (ROW_FIELD) {\n  items = [...items].sort((a, b) => Number(a[ROW_FIELD]) - Number(b[ROW_FIELD]));\n}\n\nconst newSubmission = items[items.length - 1];   // Input 2\nconst lastExisting = items[items.length - 2];    // Input 1\n\nconst categories = [\n  'Welding & Balistic',\n  'Office Complex',\n  'Injection',\n  'Power House',\n  'Meter Assembly',\n  'Showroom',\n  'Vehicle assembly & Shooting range',\n  'Glass roller',\n  'Glass Factory',\n];\n\n// Step 1: subtract last existing data from the new submission, per category\nconst diffs = {};\nfor (const key of categories) {\n  const v1 = Number(lastExisting[key]) || 0;\n  const v2 = Number(newSubmission[key]) || 0;\n  diffs[key] = v2 - v1;\n}\n\n// Step 2: roll up into the two combined metrics\nconst EPAIL = diffs['Welding & Balistic'] + diffs['Showroom'] + diffs['Vehicle assembly & Shooting range'];\nconst glassFac = diffs['Glass roller'] + diffs['Glass Factory'];\n\n// Step 3: build final structured output (7 values total)\n// PERIOD??? is carried over as-is from the new submission — not calculated.\nconst output = {\n  'EPAIL': EPAIL,\n  'Glass Fac.': glassFac,\n  'Office Complex': diffs['Office Complex'],\n  'Injection': diffs['Injection'],\n  'Power House': diffs['Power House'],\n  'Meter Assembly': diffs['Meter Assembly'],\n  'PERIOD': newSubmission['Period'],\n  'Timestamp': newSubmission['Timestamp'],\n};\n\nreturn [{ json: output }];"
+      },
+      "id": "4b0ddd67-ed5c-478c-82a1-d6d33dbd2598",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI",
+          "mode": "list",
+          "cachedResultName": "                                                                     CCTEC POWER COMSUMPTION RECORD {KWH}",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "EPAIL": "={{ $json.EPAIL }}",
+            "GLASS FACTORY": "={{ $json[\"Glass Fac.\"] }}",
+            "OFFICE COMPLEX": "={{ $json[\"Office Complex\"] }}",
+            "INJ. SECTION": "={{ $json.Injection }}",
+            "POWER HOUSE": "={{ $json[\"Power House\"] }}",
+            "ASS. LINE": "={{ $json[\"Meter Assembly\"] }}",
+            "Timestamp": "={{ $json.Timestamp }}",
+            "PERIOD": "={{ $json.PERIOD }}"
+          },
+          "matchingColumns": [
+            "PERIOD"
+          ],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "PERIOD",
+              "displayName": "PERIOD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "EPAIL",
+              "displayName": "EPAIL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "GLASS FACTORY",
+              "displayName": "GLASS FACTORY",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "OFFICE COMPLEX",
+              "displayName": "OFFICE COMPLEX",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "INJ. SECTION",
+              "displayName": "INJ. SECTION",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "POWER HOUSE",
+              "displayName": "POWER HOUSE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ASS. LINE",
+              "displayName": "ASS. LINE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "CCTEC",
+              "displayName": "CCTEC",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "TOTAL",
+              "displayName": "TOTAL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "KWH LOST",
+              "displayName": "KWH LOST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5292c85d-2739-4395-b10f-0861b323543f",
+      "name": "Append or update row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        736,
+        -80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FZHZ3z8rkap2tYax",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "ojokayode007@gmail.com",
+        "subject": "CCTEC value request",
+        "message": "=Good morning, sir,\n\nThe collation of our power consumption record  for ({{ $json.PERIOD }}) is currently being compiled. Please, what is the given CCTEC value for this period so we can proceed.\n\nThank you for your prompt response, sir.",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "CCTEC value",
+              "fieldType": "number",
+              "placeholder": "CCTEC value →",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9ffe173e-398c-47ab-8d1b-b402385a3e9e",
+      "name": "Send message and wait for response",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        -80
+      ],
+      "webhookId": "e835c34b-4162-47ea-b784-e47071c47d90",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "l4KaBZQO30lcmAcC",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI",
+          "mode": "list",
+          "cachedResultName": "CCTEC POWER COMSUMPTION RECORD {KWH}",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ DateTime.fromISO($json.data.respondedAt).toFormat('HH:mm') }}",
+            "PERIOD": "={{ $('Append or update row in sheet').item.json.PERIOD }}",
+            "EPAIL": "={{ $('Append or update row in sheet').item.json.EPAIL }}",
+            "GLASS FACTORY": "={{ $('Append or update row in sheet').item.json['GLASS FACTORY'] }}",
+            "OFFICE COMPLEX": "={{ $('Append or update row in sheet').item.json['OFFICE COMPLEX'] }}",
+            "INJ. SECTION": "={{ $('Append or update row in sheet').item.json['INJ. SECTION'] }}",
+            "POWER HOUSE": "={{ $('Append or update row in sheet').item.json['POWER HOUSE'] }}",
+            "ASS. LINE": "={{ $('Append or update row in sheet').item.json['ASS. LINE'] }}",
+            "CCTEC": "={{ $json.data['CCTEC value'] }}"
+          },
+          "matchingColumns": [
+            "PERIOD"
+          ],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "PERIOD",
+              "displayName": "PERIOD",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "EPAIL",
+              "displayName": "EPAIL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "GLASS FACTORY",
+              "displayName": "GLASS FACTORY",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "OFFICE COMPLEX",
+              "displayName": "OFFICE COMPLEX",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "INJ. SECTION",
+              "displayName": "INJ. SECTION",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "POWER HOUSE",
+              "displayName": "POWER HOUSE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ASS. LINE",
+              "displayName": "ASS. LINE",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "CCTEC",
+              "displayName": "CCTEC",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TOTAL",
+              "displayName": "TOTAL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "KWH LOST",
+              "displayName": "KWH LOST",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "48fb45e9-18f6-4628-a4d1-1896a5d751a5",
+      "name": "Append or update row in sheet1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1184,
+        -80
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "FZHZ3z8rkap2tYax",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "ojokayode007@gmail.com",
+        "subject": "Approval required",
+        "message": "=<!--\n  Document Approval Request Email Template\n  -----------------------------------------\n\n  If sending via n8n's Send Email node, swap these for expressions\n  referencing your workflow data, and set the node's content type to HTML.\n-->\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Request for Document Review</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#f4f4f4; padding: 32px 16px;\">\n    <tr>\n      <td align=\"center\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px; background-color:#ffffff; border-radius:8px; overflow:hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);\">\n\n          <!-- Header -->\n          <tr>\n            <td style=\"background-color:#1a3c6e; padding:24px 32px;\">\n              <h1 style=\"margin:0; color:#ffffff; font-size:20px; font-weight:600;\">Review Request: CCTEC Power Consumption Record</h1>\n            </td>\n          </tr>\n\n          <!-- Body -->\n          <tr>\n            <td style=\"padding:32px;\">\n              <p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#333333;\">\n                Good day Sir,\n              </p>\n\n              <p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#333333;\">\n                Kindly find attached the <strong>CCTEC Power Consumption Record</strong> for your review. I would be grateful\n                if you could go through the figures and confirm that everything is accurate and in order.\n              </p>\n\n              <p style=\"margin:0 0 24px 0; font-size:15px; line-height:1.6; color:#333333;\">\n                Once you've confirmed it reflects what it should, I will proceed to forward it to the\n                Accounts Department. Please let me know if any adjustments are needed before then.\n              </p>\n\n              <!-- CTA Button -->\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin: 0 auto 24px auto;\">\n                <tr>\n                  <td align=\"center\" style=\"border-radius:6px; background-color:#1a3c6e;\">\n                    <a href=\"https://docs.google.com/spreadsheets/d/1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI/edit?gid=0#gid=0\"\n                       target=\"_blank\"\n                       style=\"display:inline-block; padding:12px 28px; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:6px;\">\n                      Review Document\n                    </a>\n                  </td>\n                </tr>\n              </table>\n\n              <p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#333333;\">\n                I look forward to your feedback or approval at your earliest convenience.\n              </p>\n\n            </td>\n          </tr>\n\n          <!-- Footer -->\n          <tr>\n            <td style=\"background-color:#f0f0f0; padding:16px 32px; text-align:center;\">\n              <p style=\"margin:0; font-size:12px; color:#999999;\">\n                This message requires your review before further action is taken.\n              </p>\n            </td>\n          </tr>\n\n        </table>\n      </td>\n    </tr>\n  </table>\n</body>\n</html>",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        -80
+      ],
+      "id": "9bcb25aa-4761-4688-ae3c-2daf6c7b4656",
+      "name": "Send a message",
+      "webhookId": "06460e8b-0150-4adc-b4eb-553cb2677d63",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "l4KaBZQO30lcmAcC",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "moradeyo4abeke@gmail.com",
+        "subject": "Power Consumption Report",
+        "message": "=<!--   Power Consumption Report Delivery Email   -----------------------------------------   {{ $('Append or update row in sheet1').item.json.PERIOD }} is left as an n8n expression — this is meant to be   pasted into an n8n Send Email node (HTML content type) so it resolves   automatically from your workflow data. --> <!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> <title>Power Consumption Report</title> </head> <body style=\"margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;\">   <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#f4f4f4; padding: 32px 16px;\">     <tr>       <td align=\"center\">         <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px; background-color:#ffffff; border-radius:8px; overflow:hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);\">            <!-- Header -->           <tr>             <td style=\"background-color:#1a3c6e; padding:24px 32px;\">               <h1 style=\"margin:0; color:#ffffff; font-size:20px; font-weight:600;\">Power Consumption Report — {{ $json.PERIOD }}</h1>             </td>           </tr>            <!-- Body -->           <tr>             <td style=\"padding:32px;\">               <p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#333333;\">                 Good day Sir,               </p>                <p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.6; color:#333333;\">                 Please find attached the updated power consumption report for <strong>{{ $('Append or update row in sheet1').item.json.PERIOD }}</strong>.               </p>                <p style=\"margin:0 0 24px 0; font-size:15px; line-height:1.6; color:#333333;\">                 Kindly note that the attached document can be viewed directly or downloaded, depending on                 your preference and need for further action.               </p>                <!-- CTA Button -->               <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin: 0 auto 24px auto;\">                 <tr>                   <td align=\"center\" style=\"border-radius:6px; background-color:#1a3c6e;\">                     <a href=\"https://docs.google.com/spreadsheets/d/1Ki1blhZxwS6cQXVJbu1bwQF55lG3DKTA1NEV-2esEvI/edit?gid=0#gid=0\"                        target=\"_blank\"                        style=\"display:inline-block; padding:12px 28px; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:6px;\">                       View or Download Report                     </a>                   </td>                 </tr>               </table>                <p style=\"margin:0; font-size:15px; line-height:1.6; color:#333333;\">                 Thank you, sir.               </p>             </td>           </tr>          </table>       </td>     </tr>   </table> </body> </html>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        -80
+      ],
+      "id": "a6230dba-ea44-4328-980a-63b1240a54d2",
+      "name": "Send a message1",
+      "webhookId": "3e7e5829-05a0-41e7-8cae-2f9dcc293c11",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "l4KaBZQO30lcmAcC",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f37b85e7-3a7c-4d40-b342-88f27755b3a0",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1632,
+        -80
+      ],
+      "id": "2c3b819d-0184-4244-b019-57ffde326ed4",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "bac37d61-2231-45d8-be99-2905e219909d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0bbee2af34b5d0b3fad6144ad639feec53827eb2e9ea57be65c187c2ed353a20"
+  },
+  "nodeGroups": [],
+  "id": "6PYExeNUm63x0AyK",
+  "tags": []
+}
